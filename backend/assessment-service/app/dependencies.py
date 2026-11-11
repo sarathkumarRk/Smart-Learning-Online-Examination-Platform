@@ -1,0 +1,85 @@
+import jwt
+from jwt import InvalidTokenError
+
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+from app.config import settings
+
+security = HTTPBearer(auto_error=False)
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    if credentials is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required"
+        )
+
+    try:
+        payload = jwt.decode(
+            credentials.credentials,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM]
+        )
+
+        user_id = payload.get("sub")
+        role = payload.get("role")
+
+        if not user_id or not role:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token"
+            )
+
+        return {
+            "id": int(user_id),
+            "role": str(role).upper()
+        }
+
+    except HTTPException:
+        raise
+
+    except (InvalidTokenError, ValueError, TypeError):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token"
+        )
+
+
+def student_required(
+    user: dict = Depends(get_current_user)
+):
+    if user["role"] != "STUDENT":
+        raise HTTPException(
+            status_code=403,
+            detail="Student access required"
+        )
+
+    return user
+
+
+def instructor_required(
+    user: dict = Depends(get_current_user)
+):
+    if user["role"] != "INSTRUCTOR":
+        raise HTTPException(
+            status_code=403,
+            detail="Instructor access required"
+        )
+
+    return user
+
+
+def admin_required(
+    user: dict = Depends(get_current_user)
+):
+    if user["role"] != "ADMIN":
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required"
+        )
+
+    return user
